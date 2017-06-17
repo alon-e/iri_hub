@@ -566,7 +566,7 @@ public class API {
         return true;
     }
 
-    private synchronized AbstractResponse findTransactionStatement(final Map<String, Object> request) throws Exception {
+    public synchronized AbstractResponse findTransactionStatement(final Map<String, Object> request) throws Exception {
         final Set<Hash> bundlesTransactions = new HashSet<>();
 
         if (request.containsKey("bundles")) {
@@ -891,7 +891,7 @@ public class API {
 
         static final Worker worker = new Worker();
 
-        static synchronized AbstractResponse response(Iota instance, final Map<String, Object> request) {
+        static synchronized AbstractResponse response(Iota instance, final Map<String, Object> request) throws Exception {
 
             final String command = (String) request.get("command");
 
@@ -938,25 +938,32 @@ public class API {
                             account.generateNewAddress(seed, securityLevel,i);
                         } else {
                             // if account has balance - mark for sweeping
-                            if (account.status == Account.TO_SWEEP && worker.getBalance(instance, account) != 0) {
+                            if (account.pendingSweeps.isEmpty() && worker.getBalance(instance, account) != 0) {
                                 sweepAccountIndexes.add(i);
                             }
 
                             // if account was recently swept & sweep approved
-                            if (account.status == Account.SWEPT && worker.getBalance(instance, account) == 0) {
-                                //credit, gen new addy.
-                                final long value = worker.getSweepAmount(instance, account);
-                                if (value > 0) {
-                                    account.credit(value);
+                            if (!account.pendingSweeps.isEmpty()) {
+                                boolean hasConfrimedSweep = false;
+                                for(String sweep : account.pendingSweeps) {
+                                    if (worker.isSweepConfirmed(instance, sweep)) {
+                                        //credit, gen new addy.
+                                        final long value = worker.getSweepAmount(instance, sweep);
+                                        if (value > 0) {
+                                            account.credit(value,sweep);
+                                        }
+                                        hasConfrimedSweep = true;
+                                    }
                                 }
-                                account.generateNewAddress(seed, securityLevel,i);
+                                if (hasConfrimedSweep) {
+                                    account.generateNewAddress(seed, securityLevel, i);
+                                }
                             }
 
                         }
                     }
                     // actually sweep
-                    worker.sweepAccounts(instance, seed,sweepAccountIndexes);
-
+                    worker.sweepAccounts(instance, seed, hub, sweepAccountIndexes);
 
                     return HubSynchronizeResponse.create(0, "", hub.latestSynchronizationMilestone);
                 }
@@ -1053,19 +1060,17 @@ public class API {
         }
 
         static final class Account {
-            static final int TO_SWEEP = 1;
-            static final int SWEPT = 2;
 
             long balance;
+            List<String> pendingSweeps;
             String name;
-            int status;
 
             final List<String> addresses;
 
             Account(String accountName) {
                 balance = 0;
+                pendingSweeps = new LinkedList<>();
                 name = accountName;
-                status = TO_SWEEP;
                 addresses = new LinkedList<>();
             }
 
@@ -1088,8 +1093,10 @@ public class API {
                 addresses.add(Converter.trytes(addressWithChecksum));
             }
 
-            public void credit(long value) {
+            public void credit(long value,String sweep) {
+                pendingSweeps.remove(sweep);
                 balance += value;
+
             }
         }
 
@@ -1097,23 +1104,43 @@ public class API {
             static final int maxSweepSize = 10;
 
             public int getLastestMilestone(Iota instance) {
-                //TODO: fetch latest milestone
-                return instance.latestSnapshot.index();
+                //fetch latest milestone
+                return instance.milestone.latestSolidSubtangleMilestoneIndex;
             }
 
-            public long getBalance(Iota instance, Account account) {
-                //TODO: get balance of latest address
-                return instance.latestSnapshot.getState().containsKey(account) ? instance.latestSnapshot.getState().get(account) : 0;
+            public long getBalance(Iota instance, Account account) throws Exception {
+                //get balance of all addresses
+                final List<Hash> addresses = account.addresses.stream().map(address -> (new Hash(address)))
+                        .collect(Collectors.toCollection(LinkedList::new));
+
+                final Map<Hash, Long> balances = new HashMap<>();
+                synchronized (Snapshot.latestSnapshotSyncObject) {
+                    for (final Hash address : addresses) {
+                        balances.put(address,
+                                instance.latestSnapshot.getState().containsKey(address) ?
+                                        instance.latestSnapshot.getState().get(address) : Long.valueOf(0));
+                    }
+                }
+                return balances.values().stream().reduce(Math::addExact).orElse(Long.MAX_VALUE);
             }
 
-            public long getSweepAmount(Iota instance, Account account) {
-                //TODO: get amount of latest sweep (in positive value)
-                return 1;
+            public boolean isSweepConfirmed(Iota instance, String sweep) throws Exception {
+                //get inclusion state of sweep
+                final TransactionViewModel transactionViewModel = TransactionViewModel.fromHash(instance.tangle, new Hash(sweep));
+                return transactionViewModel.snapshotIndex()!=0;
             }
 
-            public void sweepAccounts(Iota instance, String seed, List<Integer> sweepAccountIndexes) {
+            public long getSweepAmount(Iota instance, String sweep) throws Exception {
+                //get value of sweep (in positive value)
+                final TransactionViewModel transactionViewModel = TransactionViewModel.fromHash(instance.tangle, new Hash(sweep));
+                return (-1) * transactionViewModel.value();
+            }
+
+            public void sweepAccounts(Iota instance, String seed, Hub hub, List<Integer> sweepAccountIndexes) {
                 //TODO: go over accounts & sweep them - in batches of maxSweepSize
+                //TODO: write to each account the pending sweep
             }
+
         }
     }
 }
