@@ -26,7 +26,9 @@ import java.util.stream.Collectors;
 
 import com.iota.iri.*;
 import com.iota.iri.controllers.*;
+import com.iota.iri.hash.ISS;
 import com.iota.iri.network.*;
+import com.iota.iri.service.dto.*;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,21 +42,6 @@ import com.iota.iri.conf.Configuration.DefaultConfSettings;
 import com.iota.iri.hash.Curl;
 import com.iota.iri.hash.PearlDiver;
 import com.iota.iri.model.Hash;
-import com.iota.iri.service.dto.AbstractResponse;
-import com.iota.iri.service.dto.AccessLimitedResponse;
-import com.iota.iri.service.dto.AddedNeighborsResponse;
-import com.iota.iri.service.dto.AttachToTangleResponse;
-import com.iota.iri.service.dto.ErrorResponse;
-import com.iota.iri.service.dto.ExceptionResponse;
-import com.iota.iri.service.dto.FindTransactionsResponse;
-import com.iota.iri.service.dto.GetBalancesResponse;
-import com.iota.iri.service.dto.GetInclusionStatesResponse;
-import com.iota.iri.service.dto.GetNeighborsResponse;
-import com.iota.iri.service.dto.GetNodeInfoResponse;
-import com.iota.iri.service.dto.GetTipsResponse;
-import com.iota.iri.service.dto.GetTransactionsToApproveResponse;
-import com.iota.iri.service.dto.GetTrytesResponse;
-import com.iota.iri.service.dto.RemoveNeighborsResponse;
 import com.iota.iri.utils.Converter;
 import com.iota.iri.utils.MapIdentityManager;
 
@@ -364,7 +351,11 @@ public class API {
                     }
                 }
                 default: {
-                    AbstractResponse response = ixi.processCommand(command, request);
+                    AbstractResponse response;
+                    response = HubAPI.response(instance,request);
+                    if (response == null) {
+                        response = ixi.processCommand(command, request);
+                    }
                     return response == null ?
                             ErrorResponse.create("Command [" + command + "] is unknown") :
                             response;
@@ -383,10 +374,10 @@ public class API {
 
     private AbstractResponse removeNeighborsStatement(List<String> uris) throws URISyntaxException {
         final AtomicInteger numberOfRemovedNeighbors = new AtomicInteger(0);
-        
+
         for (final String uriString : uris) {
             final URI uri = new URI(uriString);
-            
+
             if ("udp".equals(uri.getScheme()) || "tcp".equals(uri.getScheme())) {
                 log.info("Removing neighbor: "+uriString);
                 if (instance.node.removeNeighbor(uri,true)) {
@@ -421,7 +412,7 @@ public class API {
     public static void incCounter_getTxToApprove() {
         counter_getTxToApprove++;
     }
-    
+
     private static long ellapsedTime_getTxToApprove = 0L;
     public static long getEllapsedTime_getTxToApprove() {
         return ellapsedTime_getTxToApprove;
@@ -684,32 +675,32 @@ public class API {
         final int milestoneIndex = instance.milestone.latestSolidSubtangleMilestoneIndex;
 
 
-            Set<Hash> analyzedTips = new HashSet<>();
+        Set<Hash> analyzedTips = new HashSet<>();
 
-            final Queue<Hash> nonAnalyzedTransactions = new LinkedList<>(Collections.singleton(milestone));
-                    //Collections.singleton(StorageTransactions.instance().transactionPointer(milestone.value())));
-            Hash hash;
-            while ((hash = nonAnalyzedTransactions.poll()) != null) {
+        final Queue<Hash> nonAnalyzedTransactions = new LinkedList<>(Collections.singleton(milestone));
+        //Collections.singleton(StorageTransactions.instance().transactionPointer(milestone.value())));
+        Hash hash;
+        while ((hash = nonAnalyzedTransactions.poll()) != null) {
 
-                if (analyzedTips.add(hash)) {
+            if (analyzedTips.add(hash)) {
 
-                    final TransactionViewModel transactionViewModel = TransactionViewModel.fromHash(instance.tangle, hash);
+                final TransactionViewModel transactionViewModel = TransactionViewModel.fromHash(instance.tangle, hash);
 
-                    if(transactionViewModel.snapshotIndex() == 0 || transactionViewModel.snapshotIndex() > index) {
-                        if (transactionViewModel.value() != 0) {
+                if(transactionViewModel.snapshotIndex() == 0 || transactionViewModel.snapshotIndex() > index) {
+                    if (transactionViewModel.value() != 0) {
 
-                            final Hash address = transactionViewModel.getAddressHash();
-                            final Long balance = balances.get(address);
-                            if (balance != null) {
+                        final Hash address = transactionViewModel.getAddressHash();
+                        final Long balance = balances.get(address);
+                        if (balance != null) {
 
-                                balances.put(address, balance + transactionViewModel.value());
-                            }
+                            balances.put(address, balance + transactionViewModel.value());
                         }
-                        nonAnalyzedTransactions.offer(transactionViewModel.getTrunkTransactionHash());
-                        nonAnalyzedTransactions.offer(transactionViewModel.getBranchTransactionHash());
                     }
+                    nonAnalyzedTransactions.offer(transactionViewModel.getTrunkTransactionHash());
+                    nonAnalyzedTransactions.offer(transactionViewModel.getBranchTransactionHash());
                 }
             }
+        }
         final List<String> elements = addresses.stream().map(address -> balances.get(address).toString())
                 .collect(Collectors.toCollection(LinkedList::new));
 
@@ -731,9 +722,9 @@ public class API {
     public static void incEllapsedTime_PoW(long ellapsedTime) {
         ellapsedTime_PoW += ellapsedTime;
     }
-    
+
     public synchronized List<String> attachToTangleStatement(final Hash trunkTransaction, final Hash branchTransaction,
-                                                                  final int minWeightMagnitude, final List<String> trytes) {
+                                                             final int minWeightMagnitude, final List<String> trytes) {
         final List<TransactionViewModel> transactionViewModels = new LinkedList<>();
 
         Hash prevTransaction = null;
@@ -784,7 +775,7 @@ public class API {
         int numberOfAddedNeighbors = 0;
         for (final String uriString : uris) {
             final URI uri = new URI(uriString);
-            
+
             if ("udp".equals(uri.getScheme()) || "tcp".equals(uri.getScheme())) {
                 log.info("Adding neighbor: "+uriString);
                 // 3rd parameter true if tcp, 4th parameter true (configured tethering)
@@ -864,7 +855,7 @@ public class API {
         headerMap.add(new HttpString("Access-Control-Allow-Origin"),"*");
         headerMap.add(new HttpString("Keep-Alive"), "timeout=500, max=100");
     }
-    
+
     private HttpHandler addSecurity(final HttpHandler toWrap) {
         String credentials = instance.configuration.string(DefaultConfSettings.REMOTE_AUTH);
         if(credentials == null || credentials.isEmpty()) return toWrap;
@@ -885,6 +876,244 @@ public class API {
     public void shutDown() {
         if (server != null) {
             server.stop();
+        }
+    }
+
+    static final class HubAPI {
+
+        static final String HUB_PREFIX = "hub.";
+
+        static final int MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT = 1000000;
+
+        static final Gson gson = new GsonBuilder().create();
+
+        static final Map<Integer, Hub> hubs = new HashMap<>();
+
+        static final Worker worker = new Worker();
+
+        static synchronized AbstractResponse response(Iota instance, final Map<String, Object> request) {
+
+            final String command = (String) request.get("command");
+
+            if (!command.startsWith(HUB_PREFIX)) {
+
+                return null;
+            }
+
+            switch (command.substring(HUB_PREFIX.length())) {
+
+                case "attach": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+                    final Hub hub = gson.fromJson((String) request.get("hubState"), Hub.class);
+
+                    if (hubs.containsKey(hubId)) {
+
+                            return HubAttachResponse.create(1, "Hub #" + hubId + " is already attached!");
+                    }
+
+                    hubs.put(hubId, hub);
+
+                    return HubAttachResponse.create(0, "");
+                }
+
+                case "synchronize": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+                    final String seed = (String) request.get("seed");
+                    final int securityLevel = ((Double) request.get("securityLevel")).intValue();
+
+                    final Hub hub = hubs.get(hubId);
+                    if (hub == null) {
+
+                        return HubSynchronizeResponse.create(2, "Hub #" + hubId + " is not attached!", -1);
+                    }
+
+                    hub.latestSynchronizationMilestone = worker.getLastestMilestone(instance);
+                    List<Integer> sweepAccountIndexes = new LinkedList<>();
+
+                    for (int i = 0; i < hub.accounts.size(); i++) {
+                        final Account account = hub.accounts.get(i);
+                        if (account.addresses.isEmpty()) {
+                            account.generateNewAddress(seed, securityLevel,i);
+                        } else {
+                            // if account has balance - mark for sweeping
+                            if (account.status == Account.TO_SWEEP && worker.getBalance(instance, account) != 0) {
+                                sweepAccountIndexes.add(i);
+                            }
+
+                            // if account was recently swept & sweep approved
+                            if (account.status == Account.SWEPT && worker.getBalance(instance, account) == 0) {
+                                //credit, gen new addy.
+                                final long value = worker.getSweepAmount(instance, account);
+                                if (value > 0) {
+                                    account.credit(value);
+                                }
+                                account.generateNewAddress(seed, securityLevel,i);
+                            }
+
+                        }
+                    }
+                    // actually sweep
+                    worker.sweepAccounts(instance, seed,sweepAccountIndexes);
+
+
+                    return HubSynchronizeResponse.create(0, "", hub.latestSynchronizationMilestone);
+                }
+
+                case "detach": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+
+                    final Hub hub = hubs.remove(hubId);
+                    if (hub == null) {
+
+                        return HubDetachResponse.create(2, "Hub #" + hubId + " is not attached!", null);
+                    }
+
+                    return HubDetachResponse.create(0, "", hub.toString());
+                }
+
+                case "getState": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+
+                    final Hub hub = hubs.get(hubId);
+                    if (hub == null) {
+
+                        return HubGetStateResponse.create(2, "Hub #" + hubId + " is not attached!", null);
+                    }
+
+                    return HubGetStateResponse.create(0, "", hub.toString());
+                }
+
+                case "registerAccount": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+                    final String AccountName = (String) request.get("accountName");
+
+                    final Hub hub = hubs.get(hubId);
+                    if (hub == null) {
+
+                        return HubRegisterAccountResponse.create(2, "Hub #" + hubId + " is not attached!", -1);
+                    }
+
+                    hub.accounts.add(new Account(AccountName));
+
+                    return HubRegisterAccountResponse.create(0, "", hub.accounts.size() - 1);
+                }
+
+                case "getDepositAddress": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+                    final int accountIndex = ((Double) request.get("accountIndex")).intValue();
+
+                    final Hub hub = hubs.get(hubId);
+                    if (hub == null) {
+
+                        return HubGetDepositAddressResponse.create(2, "Hub #" + hubId + " is not attached!", null);
+                    }
+
+                    if (accountIndex < 0 || accountIndex >= hub.accounts.size()) {
+
+                        return HubGetDepositAddressResponse.create(3, "Account #" + accountIndex + " does not exist!", null);
+                    }
+
+                    final Account account = hub.accounts.get(accountIndex);
+                    if (account.addresses.isEmpty()) {
+
+                        return HubGetDepositAddressResponse.create(4, "There is no an address assigned to the account yet!", "null");
+                    }
+
+                    return HubGetDepositAddressResponse.create(0, "", account.depositAddress());
+                }
+
+                default: {
+
+                    return null;
+                }
+            }
+        }
+
+        static final class Hub {
+
+            int latestSynchronizationMilestone;
+            final List<Account> accounts;
+
+            Hub() {
+
+                accounts = new LinkedList<>();
+            }
+
+            @Override
+            public String toString() {
+
+                return gson.toJson(this);
+            }
+        }
+
+        static final class Account {
+            static final int TO_SWEEP = 1;
+            static final int SWEPT = 2;
+
+            long balance;
+            String name;
+            int status;
+
+            final List<String> addresses;
+
+            Account(String accountName) {
+                balance = 0;
+                name = accountName;
+                status = TO_SWEEP;
+                addresses = new LinkedList<>();
+            }
+
+            String depositAddress() {
+                return addresses.isEmpty() ? null : addresses.get(addresses.size() - 1);
+            }
+
+            void generateNewAddress(final String seed, final int securityLevel, final int accountIndex) {
+
+                if (seed.length() != 81 || securityLevel < 1 || securityLevel > 3) {
+                    throw new RuntimeException("Invalid seed or securityLevel");
+                }
+
+                final int[] address = ISS.address(ISS.digests(ISS.key(ISS.subseed(Converter.trits(seed), accountIndex * MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT + addresses.size()), securityLevel)));
+                final Curl curl = new Curl();
+                curl.absorb(address, 0, address.length);
+                final int[] addressWithChecksum = Arrays.copyOf(address, address.length + 27);
+                curl.squeeze(addressWithChecksum, address.length, 27);
+
+                addresses.add(Converter.trytes(addressWithChecksum));
+            }
+
+            public void credit(long value) {
+                balance += value;
+            }
+        }
+
+        static final class Worker {
+            static final int maxSweepSize = 10;
+
+            public int getLastestMilestone(Iota instance) {
+                //TODO: fetch latest milestone
+                return instance.latestSnapshot.index();
+            }
+
+            public long getBalance(Iota instance, Account account) {
+                //TODO: get balance of latest address
+                return instance.latestSnapshot.getState().containsKey(account) ? instance.latestSnapshot.getState().get(account) : 0;
+            }
+
+            public long getSweepAmount(Iota instance, Account account) {
+                //TODO: get amount of latest sweep (in positive value)
+                return 1;
+            }
+
+            public void sweepAccounts(Iota instance, String seed, List<Integer> sweepAccountIndexes) {
+                //TODO: go over accounts & sweep them - in batches of maxSweepSize
+            }
         }
     }
 }
