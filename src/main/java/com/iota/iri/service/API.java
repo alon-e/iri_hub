@@ -1161,7 +1161,7 @@ public class API {
                 for (int i: sweepAccountIndexes) {
                     //go over accounts & sweep them
                     final Account account = hub.accounts.get(i);
-                    List<String> txs = sendTransfer(instance, seed, securityLevel, i,account , destination);
+                    List<String> txs = sendAccountBalance(instance, seed, securityLevel, i,account , destination);
 
                     //write to each account the pending sweep tx
                     for (String tx : txs) {
@@ -1173,7 +1173,7 @@ public class API {
                 }
             }
 
-            private List<String> sendTransfer(Iota instance, String seed, int security, int accountIndex, Account account , String destination) {
+            private List<String> sendAccountBalance(Iota instance, String seed, int security, int accountIndex, Account account , String destination) {
                 //TODO
 
                 int start = accountIndex * MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT;
@@ -1190,8 +1190,7 @@ public class API {
                 }
                 String changeAddress = destination;
 
-                //Prepare transfer
-                //send Trytes
+                //TODO sendTransfer
 
                 //TODO return hashes
                 List<String> txs = new LinkedList<>();
