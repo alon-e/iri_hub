@@ -951,8 +951,10 @@ public class API {
                             account.generateNewAddress(seed, securityLevel,i);
                         } else {
                             // if account has balance - mark for sweeping
-                            if (account.pendingSweeps.isEmpty() && worker.getBalance(instance, account) != 0) {
+                            account.setBalance(worker.getBalance(instance, account));
+                            if (account.pendingSweeps.isEmpty() && account.balance != 0) {
                                 sweepAccountIndexes.add(i);
+                                account.setBalance(worker.getBalance(instance, account));
                             }
 
                             // if account was recently swept & sweep approved
@@ -1075,6 +1077,7 @@ public class API {
         static final class Account {
 
             long balance;
+            long credit;
             List<String> pendingSweeps;
             String name;
 
@@ -1082,6 +1085,7 @@ public class API {
 
             Account(String accountName) {
                 balance = 0;
+                credit = 0;
                 pendingSweeps = new LinkedList<>();
                 name = accountName;
                 addresses = new LinkedList<>();
@@ -1108,8 +1112,11 @@ public class API {
 
             public void credit(long value,String sweep) {
                 pendingSweeps.remove(sweep);
-                balance += value;
+                credit += value;
+            }
 
+            public void setBalance(long value) {
+                balance = value;
             }
         }
 
