@@ -884,6 +884,7 @@ public class API {
         static final String HUB_PREFIX = "hub.";
 
         static final int MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT = 1000000;
+        static final int TIP_SELECT_DEPTH = 3;
 
         static final Gson gson = new GsonBuilder().create();
 
@@ -1160,7 +1161,7 @@ public class API {
                 for (int i: sweepAccountIndexes) {
                     //go over accounts & sweep them
                     final Account account = hub.accounts.get(i);
-                    List<String> txs = sendTransfer(seed, securityLevel, i,account.addresses.size(), destination);
+                    List<String> txs = sendTransfer(instance, seed, securityLevel, i,account , destination);
 
                     //write to each account the pending sweep tx
                     for (String tx : txs) {
@@ -1172,11 +1173,27 @@ public class API {
                 }
             }
 
-            private List<String> sendTransfer(String seed, int securityLevel, int accountIndex, int total, String destination) {
-                //TODO STUB
-                //TODO - don't forget to deal w/ change!
-                int start = accountIndex * MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT;
+            private List<String> sendTransfer(Iota instance, String seed, int security, int accountIndex, Account account , String destination) {
+                //TODO
 
+                int start = accountIndex * MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT;
+                int depth = HubAPI.TIP_SELECT_DEPTH;
+                int minWeightMagnitude = instance.transactionValidator.getMinWeightMagnitude();
+                //TODO transfers
+                //transfers = [{"address": destination, "value": value}]
+                //TODO inputs
+                //inputs = []
+                for (int i=0;i<account.addresses.size();i++) {
+                    String address = account.addresses.get(i);
+                    int index = start + i;
+                    //inputs.push = [{"address": address, "keyIndex": index, "security": security}]
+                }
+                String changeAddress = destination;
+
+                //Prepare transfer
+                //send Trytes
+
+                //TODO return hashes
                 List<String> txs = new LinkedList<>();
                 txs.add("ALON999");
                 txs.add("ALON999");
