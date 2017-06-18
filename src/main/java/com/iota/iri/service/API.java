@@ -895,18 +895,31 @@ public class API {
 
             final String command = (String) request.get("command");
 
-            if (!command.startsWith(HUB_PREFIX)) {
+            if (!command.startsWith(HUB_PREFIX) || command.length()<=HUB_PREFIX.length()) {
 
                 return null;
             }
 
+
             switch (command.substring(HUB_PREFIX.length())) {
+
+                case "create": {
+
+                    final int hubId = ((Double) request.get("hubId")).intValue();
+
+                    if (hubs.containsKey(hubId)) {
+                        return HubAttachResponse.create(1, "Hub #" + hubId + " already exists!");
+                    }
+
+                    hubs.put(hubId, new Hub());
+
+                    return HubAttachResponse.create(0, "");
+                }
 
                 case "attach": {
 
                     final int hubId = ((Double) request.get("hubId")).intValue();
                     final Hub hub = gson.fromJson((String) request.get("hubState"), Hub.class);
-
                     if (hubs.containsKey(hubId)) {
 
                             return HubAttachResponse.create(1, "Hub #" + hubId + " is already attached!");
@@ -1140,7 +1153,7 @@ public class API {
                 for (int i: sweepAccountIndexes) {
                     //go over accounts & sweep them
                     final Account account = hub.accounts.get(i);
-                    List<String> txs = sendTransfer(seed, securityLevel, i,account.addresses.size()-1, destination);
+                    List<String> txs = sendTransfer(seed, securityLevel, i,account.addresses.size(), destination);
 
                     //write to each account the pending sweep tx
                     for (String tx : txs) {
