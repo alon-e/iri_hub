@@ -922,7 +922,7 @@ public class API {
                     final int hubId = ((Double) request.get("hubId")).intValue();
                     final String seed = (String) request.get("seed");
                     final int securityLevel = ((Double) request.get("securityLevel")).intValue();
-
+                    final String destination = (String) request.get("destination");
                     final Hub hub = hubs.get(hubId);
                     if (hub == null) {
 
@@ -963,7 +963,7 @@ public class API {
                         }
                     }
                     // actually sweep
-                    worker.sweepAccounts(instance, seed, hub, sweepAccountIndexes);
+                    worker.sweepAccounts(instance, seed, securityLevel, hub, sweepAccountIndexes, destination);
 
                     return HubSynchronizeResponse.create(0, "", hub.latestSynchronizationMilestone);
                 }
@@ -1105,7 +1105,7 @@ public class API {
 
             public int getLastestMilestone(Iota instance) {
                 //fetch latest milestone
-                return instance.milestone.latestSolidSubtangleMilestoneIndex;
+                return instance.latestSnapshot.index();
             }
 
             public long getBalance(Iota instance, Account account) throws Exception {
@@ -1136,9 +1136,31 @@ public class API {
                 return (-1) * transactionViewModel.value();
             }
 
-            public void sweepAccounts(Iota instance, String seed, Hub hub, List<Integer> sweepAccountIndexes) {
-                //TODO: go over accounts & sweep them - in batches of maxSweepSize
-                //TODO: write to each account the pending sweep
+            public void sweepAccounts(Iota instance, String seed, int securityLevel, Hub hub, List<Integer> sweepAccountIndexes,String destination) throws Exception {
+                for (int i: sweepAccountIndexes) {
+                    //go over accounts & sweep them
+                    final Account account = hub.accounts.get(i);
+                    List<String> txs = sendTransfer(seed, securityLevel, i,account.addresses.size()-1, destination);
+
+                    //write to each account the pending sweep tx
+                    for (String tx : txs) {
+                        final TransactionViewModel transactionViewModel = TransactionViewModel.fromHash(instance.tangle, new Hash(tx));
+                        if (account.addresses.contains(transactionViewModel.getAddressHash().toString())) {
+                            account.pendingSweeps.add(tx);
+                        }
+                    }
+                }
+            }
+
+            private List<String> sendTransfer(String seed, int securityLevel, int accountIndex, int total, String destination) {
+                //TODO STUB
+                //TODO - don't forget to deal w/ change!
+                int start = accountIndex * MAX_NUMBER_OF_ADDRESSES_PER_ACCOUNT;
+
+                List<String> txs = new LinkedList<>();
+                txs.add("ALON999");
+                txs.add("ALON999");
+                return txs;
             }
 
         }
